@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Dark mode styles */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1f2937;
+            --bg-secondary: #111827;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-color: #374151;
+        }
+
+        body {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .dark-mode-toggle {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+
+        .answer-option {
+            transition: all 0.2s ease;
+        }
+
+        .answer-option:hover {
+            transform: translateY(-2px);
+        }
+
+        .correct-answer {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .incorrect-answer {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .selected-answer {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Slide animations */
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .slide-in-right {
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        .slide-in-left {
+            animation: slideInLeft 0.3s ease-out;
+        }
+
+        .answer-detail {
+            transition: all 0.3s ease;
+            max-height: 0;
+            overflow: hidden;
+        }
+
+        .answer-detail.show {
+            max-height: 1000px;
+        }
+
+        /* Mobile compact mode */
+        @media (max-width: 640px) {
+            .compact-mode .answer-option {
+                padding: 0.5rem;
+                font-size: 0.875rem;
+            }
+            
+            .compact-mode #question-text {
+                font-size: 1rem;
+                line-height: 1.4;
+            }
+
+            .compact-mode .px-6 {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans" data-theme="light">
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <!-- Dark Mode Toggle -->
+        <button id="dark-mode-toggle" class="fixed top-4 right-4 p-2 rounded-full dark-mode-toggle shadow-lg z-10">
+            <i class="fas fa-moon" id="theme-icon"></i>
+        </button>
+
+        <!-- Header -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-indigo-700 mb-2">Quiz Master</h1>
+            <p class="text-gray-600">Test your knowledge with custom quizzes</p>
+        </header>
+
+        <!-- Main App Container -->
+        <div id="app" class="bg-white rounded-xl shadow-lg overflow-hidden" style="background-color: var(--bg-primary);">
+            <!-- Settings Panel -->
+            <div id="settings-panel" class="p-6 fade-in">
+                <h2 class="text-xl font-semibold mb-4">Google Sheet Settings</h2>
+                <div class="mb-6">
+                    <label for="sheet-url" class="block text-sm font-medium mb-1">Google Sheet URL</label>
+                    <div class="flex">
+                        <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." 
+                               class="flex-1 px-4 py-2 border rounded-l-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                        <button id="save-url" class="px-4 py-2 bg-indigo-600 text-white rounded-r-lg hover:bg-indigo-700 transition">
+                            Save
+                        </button>
+                    </div>
+                    <p class="mt-1 text-xs" style="color: var(--text-secondary);">Make sure your sheet is published to the web (File > Share > Publish to web)</p>
+                </div>
+
+                <div class="border-t pt-6" style="border-color: var(--border-color);">
+                    <h2 class="text-xl font-semibold mb-4">Quiz Options</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="quiz-type" class="block text-sm font-medium mb-1">Quiz Type</label>
+                            <select id="quiz-type" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                    style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                <option value="practice">Practice Quiz</option>
+                                <option value="mock">Mock Exam (80 questions)</option>
+                                <option value="revision">Revision Mode (Failed Questions)</option>
+                            </select>
+                        </div>
+                        <div id="question-count-container">
+                            <label for="question-count" class="block text-sm font-medium mb-1">Number of Questions</label>
+                            <input type="number" id="question-count" min="1" max="100" value="10" 
+                                   class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                   style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="strict-mode" class="mr-2">
+                            <span class="text-sm">Strict Mode (no going back)</span>
+                        </label>
+                    </div>
+                    <div class="mt-6 space-y-3">
+                        <button id="start-quiz" class="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center">
+                            <i class="fas fa-play mr-2"></i> Start Quiz
+                        </button>
+                        <button id="view-history" class="w-full px-6 py-3 border rounded-lg font-medium hover:bg-gray-100 transition flex items-center justify-center"
+                                style="border-color: var(--border-color); color: var(--text-primary);">
+                            <i class="fas fa-history mr-2"></i> View History & Statistics
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Panel (Hidden Initially) -->
+            <div id="history-panel" class="hidden p-6 fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-semibold">Quiz History & Statistics</h2>
+                    <button id="back-to-settings" class="px-4 py-2 border rounded-lg hover:bg-gray-100 transition"
+                            style="border-color: var(--border-color);">
+                        <i class="fas fa-arrow-left mr-2"></i> Back
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg text-center" style="background-color: var(--bg-secondary);">
+                        <div class="text-2xl font-bold text-blue-600" id="total-quizzes">0</div>
+                        <div class="text-sm" style="color: var(--text-secondary);">Total Quizzes</div>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg text-center" style="background-color: var(--bg-secondary);">
+                        <div class="text-2xl font-bold text-green-600" id="avg-score">0%</div>
+                        <div class="text-sm" style="color: var(--text-secondary);">Average Score</div>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg text-center" style="background-color: var(--bg-secondary);">
+                        <div class="text-2xl font-bold text-purple-600" id="total-time">0h</div>
+                        <div class="text-sm" style="color: var(--text-secondary);">Total Time</div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-3">Score Progression</h3>
+                    <canvas id="score-chart" width="400" height="200"></canvas>
+                </div>
+
+                <div>
+                    <h3 class="text-lg font-semibold mb-3">Recent Quizzes</h3>
+                    <div id="history-list" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- Quiz Panel (Hidden Initially) -->
+            <div id="quiz-panel" class="hidden p-6 fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <span id="current-question" class="text-lg font-semibold text-indigo-600">1</span>
+                        <span style="color: var(--text-secondary);">/</span>
+                        <span id="total-questions" style="color: var(--text-secondary);">10</span>
+                    </div>
+                    <div id="timer" class="px-3 py-1 rounded-full text-sm font-medium hidden"
+                         style="background-color: var(--bg-secondary); color: var(--text-primary);">
+                        <i class="fas fa-clock mr-1"></i>
+                        <span id="time-display">00:00:00</span>
+                    </div>
+                </div>
+
+                <div class="w-full rounded-full h-2.5 mb-6" style="background-color: var(--bg-secondary);">
+                    <div id="progress-bar" class="progress-bar bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+
+                <div id="question-container" class="mb-8">
+                    <h3 id="question-text" class="text-xl font-medium mb-6"></h3>
+                    <div id="answers-container" class="space-y-3"></div>
+                </div>
+
+                <div class="flex justify-between">
+                    <button id="quit-quiz" class="px-4 py-2 border rounded-lg hover:bg-gray-100 transition"
+                            style="border-color: var(--border-color); color: var(--text-primary);">
+                        <i class="fas fa-sign-out-alt mr-2"></i> Quit Quiz
+                    </button>
+                    <div>
+                        <button id="prev-question" class="px-4 py-2 border rounded-lg hover:bg-gray-100 transition mr-2"
+                                style="border-color: var(--border-color); color: var(--text-primary);">
+                            <i class="fas fa-arrow-left mr-2"></i> Previous
+                        </button>
+                        <button id="next-question" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                            Next <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                        <button id="submit-quiz" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition hidden">
+                            Submit <i class="fas fa-check ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel (Hidden Initially) -->
+            <div id="results-panel" class="hidden p-6 fade-in">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold mb-2">Quiz Results</h2>
+                    <div class="flex justify-center mb-6">
+                        <div class="relative w-32 h-32">
+                            <svg class="w-full h-full" viewBox="0 0 100 100">
+                                <circle class="text-gray-200" stroke-width="10" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
+                                <circle id="score-circle" class="text-indigo-600" stroke-width="10" stroke-dasharray="251.2" stroke-dashoffset="0" stroke-linecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
+                            </svg>
+                            <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
+                                <span id="score-percent" class="text-3xl font-bold">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p id="result-message" class="text-lg mb-4" style="color: var(--text-secondary);"></p>
+                    <div class="rounded-lg p-4 mb-6" style="background-color: var(--bg-secondary);">
+                        <div class="flex justify-between mb-2">
+                            <span>Correct Answers:</span>
+                            <span id="correct-answers" class="font-medium">0</span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span>Total Questions:</span>
+                            <span id="total-answers" class="font-medium">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Time Taken:</span>
+                            <span id="time-taken" class="font-medium">00:00:00</span>
+                        </div>
+                    </div>
+                    <button id="restart-quiz" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition mr-3">
+                        <i class="fas fa-redo mr-2"></i> Try Again
+                    </button>
+                    <button id="new-quiz" class="px-6 py-2 border rounded-lg hover:bg-gray-100 transition"
+                            style="border-color: var(--border-color); color: var(--text-primary);">
+                        <i class="fas fa-home mr-2"></i> New Quiz
+                    </button>
+                </div>
+
+                <div id="review-container" class="border-t pt-6" style="border-color: var(--border-color);">
+                    <h3 class="text-lg font-semibold mb-4">Review Answers</h3>
+                    <div id="review-questions" class="space-y-6"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <div id="confirmation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="rounded-lg p-6 max-w-sm w-full mx-4" style="background-color: var(--bg-primary);">
+                <h3 class="text-xl font-semibold mb-4">Are you sure?</h3>
+                <p class="mb-6" style="color: var(--text-secondary);">You will lose all progress if you exit the quiz. Do you want to continue?</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancel-exit" class="px-4 py-2 border rounded-lg hover:bg-gray-100 transition"
+                            style="border-color: var(--border-color); color: var(--text-primary);">
+                        Continue Quiz
+                    </button>
+                    <button id="confirm-exit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                        Exit Quiz
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // App State
+        const state = {
+            sheetUrl: localStorage.getItem('sheetUrl') || '',
+            quizData: [],
+            currentQuestionIndex: 0,
+            userAnswers: [],
+            quizStarted: false,
+            quizSubmitted: false,
+            startTime: null,
+            timerInterval: null,
+            mockExam: false,
+            strictMode: false,
+            quizType: 'practice',
+            questionTimes: [],
+            currentQuestionStartTime: null,
+            animationDirection: 'right'
+        };
+
+        // Constants
+        const FAILED_QUESTIONS_KEY = 'quiz_failed_questions';
+        const QUIZ_HISTORY_KEY = 'quiz_history';
+        const CACHED_QUESTIONS_KEY = 'quiz_questions_cache';
+        const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+        // DOM Elements
+        const elements = {
+            settingsPanel: document.getElementById('settings-panel'),
+            quizPanel: document.getElementById('quiz-panel'),
+            resultsPanel: document.getElementById('results-panel'),
+            historyPanel: document.getElementById('history-panel'),
+            sheetUrlInput: document.getElementById('sheet-url'),
+            saveUrlBtn: document.getElementById('save-url'),
+            startQuizBtn: document.getElementById('start-quiz'),
+            quizTypeSelect: document.getElementById('quiz-type'),
+            questionCountInput: document.getElementById('question-count'),
+            questionCountContainer: document.getElementById('question-count-container'),
+            currentQuestionDisplay: document.getElementById('current-question'),
+            totalQuestionsDisplay: document.getElementById('total-questions'),
+            progressBar: document.getElementById('progress-bar'),
+            questionText: document.getElementById('question-text'),
+            answersContainer: document.getElementById('answers-container'),
+            prevQuestionBtn: document.getElementById('prev-question'),
+            nextQuestionBtn: document.getElementById('next-question'),
+            submitQuizBtn: document.getElementById('submit-quiz'),
+            quitQuizBtn: document.getElementById('quit-quiz'),
+            timerDisplay: document.getElementById('timer'),
+            timeDisplay: document.getElementById('time-display'),
+            scorePercent: document.getElementById('score-percent'),
+            scoreCircle: document.getElementById('score-circle'),
+            resultMessage: document.getElementById('result-message'),
+            correctAnswers: document.getElementById('correct-answers'),
+            totalAnswers: document.getElementById('total-answers'),
+            timeTaken: document.getElementById('time-taken'),
+            restartQuizBtn: document.getElementById('restart-quiz'),
+            newQuizBtn: document.getElementById('new-quiz'),
+            reviewQuestions: document.getElementById('review-questions'),
+            confirmationModal: document.getElementById('confirmation-modal'),
+            cancelExitBtn: document.getElementById('cancel-exit'),
+            confirmExitBtn: document.getElementById('confirm-exit'),
+            strictModeCheckbox: document.getElementById('strict-mode'),
+            viewHistoryBtn: document.getElementById('view-history'),
+            backToSettingsBtn: document.getElementById('back-to-settings'),
+            darkModeToggle: document.getElementById('dark-mode-toggle'),
+            themeIcon: document.getElementById('theme-icon')
+        };
+
+        // Initialize the app
+        function init() {
+            // Load saved URL if exists
+            if (state.sheetUrl) {
+                elements.sheetUrlInput.value = state.sheetUrl;
+            }
+
+            // Load dark mode preference
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.body.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+
+            // Add compact mode class for mobile
+            if (window.innerWidth <= 640) {
+                document.getElementById('app').classList.add('compact-mode');
+            }
+
+            // Initialize swipe gestures for mobile
+            initSwipeGestures();
+
+            // Event Listeners
+            elements.saveUrlBtn.addEventListener('click', saveSheetUrl);
+            elements.startQuizBtn.addEventListener('click', startQuiz);
+            elements.quizTypeSelect.addEventListener('change', toggleQuizType);
+            elements.prevQuestionBtn.addEventListener('click', showPreviousQuestion);
+            elements.nextQuestionBtn.addEventListener('click', showNextQuestion);
+            elements.submitQuizBtn.addEventListener('click', submitQuiz);
+            elements.quitQuizBtn.addEventListener('click', showConfirmationModal);
+            elements.restartQuizBtn.addEventListener('click', restartQuiz);
+            elements.newQuizBtn.addEventListener('click', showSettingsPanel);
+            elements.cancelExitBtn.addEventListener('click', hideConfirmationModal);
+            elements.confirmExitBtn.addEventListener('click', exitQuiz);
+            elements.viewHistoryBtn.addEventListener('click', showHistoryPanel);
+            elements.backToSettingsBtn.addEventListener('click', showSettingsPanel);
+            elements.darkModeToggle.addEventListener('click', toggleDarkMode);
+
+            // Handle visibility change for timer pause
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+
+            // Prevent leaving the quiz accidentally
+            window.addEventListener('beforeunload', (e) => {
+                if (state.quizStarted && !state.quizSubmitted) {
+                    e.preventDefault();
+                    e.returnValue = 'Are you sure you want to leave? Your quiz progress will be lost.';
+                }
+            });
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                if (window.innerWidth <= 640) {
+                    document.getElementById('app').classList.add('compact-mode');
+                } else {
+                    document.getElementById('app').classList.remove('compact-mode');
+                }
+            });
+        }
+
+        // Dark mode toggle
+        function toggleDarkMode() {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            document.body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        }
+
+        function updateThemeIcon(theme) {
+            elements.themeIcon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+
+        // Initialize swipe gestures for mobile
+        function initSwipeGestures() {
+            let touchStartX = 0;
+            let touchEndX = 0;
+
+            elements.quizPanel.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+
+            elements.quizPanel.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                handleSwipe();
+            }, { passive: true });
+
+            function handleSwipe() {
+                const swipeThreshold = 50;
+                const diff = touchStartX - touchEndX;
+
+                if (Math.abs(diff) > swipeThreshold) {
+                    if (diff > 0) {
+                        // Swipe left - next question
+                        if (state.currentQuestionIndex < state.quizData.length - 1) {
+                            showNextQuestion();
+                        }
+                    } else {
+                        // Swipe right - previous question
+                        if (state.currentQuestionIndex > 0 && !state.strictMode) {
+                            showPreviousQuestion();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle visibility change for timer pause
+        function handleVisibilityChange() {
+            if (state.timerInterval && state.mockExam) {
+                if (document.hidden) {
+                    // Pause timer
+                    clearInterval(state.timerInterval);
+                    state.pausedTime = new Date();
+                } else {
+                    // Resume timer
+                    if (state.pausedTime) {
+                        const pauseDuration = new Date() - state.pausedTime;
+                        state.startTime = new Date(state.startTime.getTime() + pauseDuration);
+                        startTimer(state.remainingSeconds);
+                    }
+                }
+            }
+        }
+
+        // Fetch with retry mechanism
+        async function fetchWithRetry(url, maxRetries = 3) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response;
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                }
+            }
+        }
+
+        // Cache questions for offline mode
+        function cacheQuestions(questions) {
+            const compressedData = JSON.stringify({
+                data: questions,
+                timestamp: Date.now(),
+                url: state.sheetUrl
+            });
+            localStorage.setItem(CACHED_QUESTIONS_KEY, compressedData);
+        }
+
+        function getCachedQuestions() {
+            try {
+                const cached = localStorage.getItem(CACHED_QUESTIONS_KEY);
+                if (!cached) return null;
+                
+                const { data, timestamp, url } = JSON.parse(cached);
+                
+                // Check if cache is from same sheet and not expired
+                if (url !== state.sheetUrl || Date.now() - timestamp > CACHE_DURATION) {
+                    localStorage.removeItem(CACHED_QUESTIONS_KEY);
+                    return null;
+                }
+                
+                return data;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Sanitize HTML to prevent XSS
+        function sanitizeHTML(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Validate quiz data
+        function validateQuizData(data) {
+            return data.filter(item => {
+                // Check structure
+                if (!item.question || typeof item.question !== 'string') return false;
+                if (!Array.isArray(item.answers) || item.answers.length < 2) return false;
+                if (!Array.isArray(item.correctAnswers) || item.correctAnswers.length === 0) return false;
+                
+                // Check that correct answers exist
+                const answerLetters = item.answers.map(a => a.letter);
+                return item.correctAnswers.every(ca => answerLetters.includes(ca));
+            });
+        }
+
+        // Save Google Sheet URL
+        function saveSheetUrl() {
+            const url = elements.sheetUrlInput.value.trim();
+            if (!url) {
+                alert('Please enter a valid Google Sheet URL');
+                return;
+            }
+
+            // Basic validation
+            if (!url.includes('docs.google.com/spreadsheets')) {
+                alert('Please enter a valid Google Sheets URL');
+                return;
+            }
+
+            state.sheetUrl = url;
+            localStorage.setItem('sheetUrl', url);
+            alert('Sheet URL saved successfully!');
+        }
+
+        // Toggle between quiz types
+        function toggleQuizType() {
+            const quizType = elements.quizTypeSelect.value;
+            state.quizType = quizType;
+            
+            if (quizType === 'mock') {
+                elements.questionCountInput.value = 80;
+                elements.questionCountContainer.classList.add('hidden');
+                state.mockExam = true;
+            } else if (quizType === 'revision') {
+                const failedQuestions = getFailedQuestions();
+                elements.questionCountInput.value = failedQuestions.length;
+                elements.questionCountContainer.classList.add('hidden');
+            } else {
+                elements.questionCountContainer.classList.remove('hidden');
+                state.mockExam = false;
+            }
+        }
+
+        // Failed questions management
+        function saveFailedQuestion(questionData, userAnswer) {
+            let failedQuestions = JSON.parse(localStorage.getItem(FAILED_QUESTIONS_KEY) || '[]');
+            
+            const failedItem = {
+                ...questionData,
+                userAnswer: userAnswer,
+                timestamp: Date.now(),
+                attempts: 1,
+                nextReview: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+            };
+            
+            // Check if question already exists
+            const existingIndex = failedQuestions.findIndex(q => q.question === questionData.question);
+            if (existingIndex !== -1) {
+                failedQuestions[existingIndex].attempts++;
+                // Spaced repetition: double the interval each time
+                const daysSinceLastAttempt = (Date.now() - failedQuestions[existingIndex].timestamp) / (24 * 60 * 60 * 1000);
+                failedQuestions[existingIndex].nextReview = Date.now() + (daysSinceLastAttempt * 2 * 24 * 60 * 60 * 1000);
+                failedQuestions[existingIndex].timestamp = Date.now();
+            } else {
+                failedQuestions.push(failedItem);
+            }
+            
+            localStorage.setItem(FAILED_QUESTIONS_KEY, JSON.stringify(failedQuestions));
+        }
+
+        function getFailedQuestions() {
+            const stored = localStorage.getItem(FAILED_QUESTIONS_KEY);
+            if (!stored) return [];
+            
+            const questions = JSON.parse(stored);
+            // Filter questions that are due for review
+            return questions.filter(q => q.nextReview <= Date.now());
+        }
+
+        // Quiz history management
+        function saveQuizResult(score, correctCount, totalQuestions, timeTaken) {
+            const history = JSON.parse(localStorage.getItem(QUIZ_HISTORY_KEY) || '[]');
+            
+            history.push({
+                date: Date.now(),
+                score: score,
+                correct: correctCount,
+                total: totalQuestions,
+                time: timeTaken,
+                type: state.quizType,
+                questionTimes: state.questionTimes
+            });
+            
+            // Keep only last 50 results
+            if (history.length > 50) {
+                history.shift();
+            }
+            
+            localStorage.setItem(QUIZ_HISTORY_KEY, JSON.stringify(history));
+        }
+
+        function getQuizHistory() {
+            return JSON.parse(localStorage.getItem(QUIZ_HISTORY_KEY) || '[]');
+        }
+
+        // Start the quiz
+        async function startQuiz() {
+            if (!state.sheetUrl) {
+                alert('Please save a valid Google Sheet URL first');
+                return;
+            }
+
+            const questionCount = parseInt(elements.questionCountInput.value);
+            if (isNaN(questionCount) || questionCount < 1) {
+                alert('Please enter a valid number of questions');
+                return;
+            }
+
+            state.strictMode = elements.strictModeCheckbox.checked;
+
+            try {
+                elements.startQuizBtn.disabled = true;
+                elements.startQuizBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Loading Questions...';
+
+                let quizQuestions = [];
+
+                if (state.quizType === 'revision') {
+                    // Load failed questions
+                    quizQuestions = getFailedQuestions();
+                    if (quizQuestions.length === 0) {
+                        alert('No failed questions to review!');
+                        return;
+                    }
+                } else {
+                    // Try to get cached questions first
+                    const cachedQuestions = getCachedQuestions();
+                    
+                    if (cachedQuestions) {
+                        quizQuestions = cachedQuestions;
+                    } else {
+                        // Fetch from Google Sheets
+                        const sheetId = extractSheetId(state.sheetUrl);
+                        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`;
+                        
+                        const response = await fetchWithRetry(url);
+                        const text = await response.text();
+                        const jsonText = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\)/)[1];
+                        const data = JSON.parse(jsonText);
+                        
+                        // Process the data
+                        const rows = data.table.rows;
+                        quizQuestions = rows.map(row => {
+                            const question = row.c[0]?.v || '';
+                            const answers = [];
+                            
+                            // Get answers from columns B to G
+                            for (let i = 1; i <= 6; i++) {
+                                if (row.c[i]?.v) {
+                                    answers.push({
+                                        letter: String.fromCharCode(64 + i),
+                                        text: row.c[i].v
+                                    });
+                                }
+                            }
+                            
+                            // Get correct answers
+                            const correctAnswersStr = row.c[7]?.v || '';
+                            const correctAnswers = correctAnswersStr.split(',').map(a => a.trim());
+                            
+                            return {
+                                question,
+                                answers,
+                                correctAnswers
+                            };
+                        });
+
+                        // Validate and cache questions
+                        quizQuestions = validateQuizData(quizQuestions);
+                        cacheQuestions(quizQuestions);
+                    }
+                }
+
+                if (quizQuestions.length === 0) {
+                    throw new Error('No valid questions found. Please check your sheet format.');
+                }
+
+                // Shuffle and select questions
+                state.quizData = shuffleArray(quizQuestions).slice(0, questionCount);
+                state.userAnswers = Array(state.quizData.length).fill(null);
+                state.questionTimes = Array(state.quizData.length).fill(0);
+                state.currentQuestionIndex = 0;
+                state.quizStarted = true;
+                state.quizSubmitted = false;
+                state.startTime = new Date();
+                state.currentQuestionStartTime = Date.now();
+
+                // Start timer for mock exam
+                if (state.mockExam) {
+                    state.remainingSeconds = 3 * 60 * 60; // 3 hours
+                    startTimer(state.remainingSeconds);
+                }
+
+                // Update UI
+                elements.settingsPanel.classList.add('hidden');
+                elements.historyPanel.classList.add('hidden');
+                elements.quizPanel.classList.remove('hidden');
+                elements.totalQuestionsDisplay.textContent = state.quizData.length;
+                showCurrentQuestion();
+
+            } catch (error) {
+                console.error('Error loading quiz data:', error);
+                
+                // Try offline mode
+                const cachedQuestions = getCachedQuestions();
+                if (cachedQuestions) {
+                    if (confirm('Unable to fetch new questions. Use cached questions from last session?')) {
+                        // Retry with cached questions
+                        state.quizData = shuffleArray(cachedQuestions).slice(0, questionCount);
+                        state.userAnswers = Array(state.quizData.length).fill(null);
+                        state.questionTimes = Array(state.quizData.length).fill(0);
+                        state.currentQuestionIndex = 0;
+                        state.quizStarted = true;
+                        state.quizSubmitted = false;
+                        state.startTime = new Date();
+                        state.currentQuestionStartTime = Date.now();
+
+                        elements.settingsPanel.classList.add('hidden');
+                        elements.quizPanel.classList.remove('hidden');
+                        elements.totalQuestionsDisplay.textContent = state.quizData.length;
+                        showCurrentQuestion();
+                        
+                        alert('Using cached questions. Note: These may not be the latest version.');
+                    }
+                } else {
+                    alert('Error loading quiz data: ' + error.message);
+                }
+            } finally {
+                elements.startQuizBtn.disabled = false;
+                elements.startQuizBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Start Quiz';
+            }
+        }
+
+        // Extract sheet ID from URL
+        function extractSheetId(url) {
+            const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+            return match ? match[1] : null;
+        }
+
+        // Fisher-Yates shuffle algorithm
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        // Show current question with animation
+        function showCurrentQuestion() {
+            // Track time for previous question
+            if (state.currentQuestionStartTime) {
+                const timeSpent = Date.now() - state.currentQuestionStartTime;
+                const prevIndex = state.animationDirection === 'right' ? 
+                    state.currentQuestionIndex - 1 : state.currentQuestionIndex + 1;
+                
+                if (prevIndex >= 0 && prevIndex < state.questionTimes.length) {
+                    state.questionTimes[prevIndex] += timeSpent;
+                }
+            }
+            state.currentQuestionStartTime = Date.now();
+
+            const question = state.quizData[state.currentQuestionIndex];
+            const userAnswer = state.userAnswers[state.currentQuestionIndex];
+            
+            // Update progress
+            const progress = ((state.currentQuestionIndex + 1) / state.quizData.length) * 100;
+            elements.progressBar.style.width = `${progress}%`;
+            elements.currentQuestionDisplay.textContent = state.currentQuestionIndex + 1;
+            
+            // Add animation class
+            const container = document.getElementById('question-container');
+            container.classList.remove('slide-in-right', 'slide-in-left');
+            void container.offsetWidth; // Force reflow
+            container.classList.add(state.animationDirection === 'right' ? 'slide-in-right' : 'slide-in-left');
+            
+            // Display question with sanitization
+            elements.questionText.innerHTML = sanitizeHTML(question.question);
+            elements.answersContainer.innerHTML = '';
+            
+            // Display answers
+            question.answers.forEach((answer) => {
+                const answerElement = document.createElement('button');
+                answerElement.className = 'answer-option w-full text-left px-4 py-3 border rounded-lg transition';
+                answerElement.style.borderColor = 'var(--border-color)';
+                answerElement.style.backgroundColor = 'var(--bg-primary)';
+                answerElement.style.color = 'var(--text-primary)';
+                
+                const answerContent = document.createElement('span');
+                answerContent.innerHTML = `<span class="font-medium">${answer.letter}.</span> ${sanitizeHTML(answer.text)}`;
+                answerElement.appendChild(answerContent);
+                
+                // Mark selected answer
+                if (userAnswer && userAnswer.includes(answer.letter)) {
+                    answerElement.classList.add('selected-answer');
+                }
+                
+                // Mark correct/incorrect answers after submission
+                if (state.quizSubmitted) {
+                    if (question.correctAnswers.includes(answer.letter)) {
+                        answerElement.classList.add('correct-answer');
+                    } else if (userAnswer && userAnswer.includes(answer.letter) && !question.correctAnswers.includes(answer.letter)) {
+                        answerElement.classList.add('incorrect-answer');
+                    }
+                }
+                
+                answerElement.addEventListener('click', () => selectAnswer(answer.letter));
+                elements.answersContainer.appendChild(answerElement);
+            });
+            
+            // Update navigation buttons
+            elements.prevQuestionBtn.disabled = state.currentQuestionIndex === 0 || state.strictMode;
+            
+            if (state.currentQuestionIndex === state.quizData.length - 1) {
+                elements.nextQuestionBtn.classList.add('hidden');
+                elements.submitQuizBtn.classList.remove('hidden');
+            } else {
+                elements.nextQuestionBtn.classList.remove('hidden');
+                elements.submitQuizBtn.classList.add('hidden');
+            }
+        }
+
+        // Select answer
+        function selectAnswer(optionLetter) {
+            if (state.quizSubmitted) return;
+            
+            const question = state.quizData[state.currentQuestionIndex];
+            let currentAnswer = state.userAnswers[state.currentQuestionIndex] || '';
+            
+            // Toggle answer selection
+            if (currentAnswer.includes(optionLetter)) {
+                // Remove the answer
+                currentAnswer = currentAnswer.split(',').filter(a => a !== optionLetter).join(',');
+            } else {
+                // Add the answer
+                currentAnswer = currentAnswer ? currentAnswer + ',' + optionLetter : optionLetter;
+            }
+            
+            state.userAnswers[state.currentQuestionIndex] = currentAnswer;
+            showCurrentQuestion();
+        }
+
+        // Show next question
+        function showNextQuestion() {
+            if (state.currentQuestionIndex < state.quizData.length - 1) {
+                state.animationDirection = 'right';
+                state.currentQuestionIndex++;
+                showCurrentQuestion();
+            }
+        }
+
+        // Show previous question
+        function showPreviousQuestion() {
+            if (state.currentQuestionIndex > 0 && !state.strictMode) {
+                state.animationDirection = 'left';
+                state.currentQuestionIndex--;
+                showCurrentQuestion();
+            }
+        }
+
+        // Submit the quiz
+        function submitQuiz() {
+            // Track time for last question
+            if (state.currentQuestionStartTime) {
+                const timeSpent = Date.now() - state.currentQuestionStartTime;
+                state.questionTimes[state.currentQuestionIndex] += timeSpent;
+            }
+
+            // Stop the timer if running
+            if (state.timerInterval) {
+                clearInterval(state.timerInterval);
+            }
+            
+            state.quizSubmitted = true;
+            showResults();
+        }
+
+        // Show quiz results
+        function showResults() {
+            // Calculate score
+            let correctCount = 0;
+            
+            state.quizData.forEach((question, index) => {
+                const userAnswer = state.userAnswers[index] || '';
+                const userAnswers = userAnswer.split(',').filter(a => a);
+                const correctAnswers = question.correctAnswers;
+                
+                // Check if answers match
+                const isCorrect = userAnswers.length === correctAnswers.length && 
+                    userAnswers.every(a => correctAnswers.includes(a));
+                
+                if (isCorrect) {
+                    correctCount++;
+                } else if (state.quizType !== 'revision') {
+                    // Save failed question (except in revision mode)
+                    saveFailedQuestion(question, userAnswer);
+                }
+            });
+            
+            const score = (correctCount / state.quizData.length) * 100;
+            const timeTaken = new Date() - state.startTime;
+            
+            // Save to history
+            saveQuizResult(score, correctCount, state.quizData.length, timeTaken);
+            
+            // Update UI
+            elements.quizPanel.classList.add('hidden');
+            elements.resultsPanel.classList.remove('hidden');
+            
+            elements.scorePercent.textContent = `${Math.round(score)}%`;
+            elements.correctAnswers.textContent = correctCount;
+            elements.totalAnswers.textContent = state.quizData.length;
+            elements.timeTaken.textContent = formatTime(timeTaken);
+            
+            // Animate the score circle
+            const circumference = 251.2;
+            const offset = circumference - (score / 100) * circumference;
+            elements.scoreCircle.style.strokeDashoffset = offset;
+            
+            // Set result message
+            if (state.mockExam) {
+                elements.resultMessage.textContent = score >= 64 ? 
+                    'Congratulations! You passed the mock exam.' : 
+                    'You did not pass the mock exam. Keep practicing!';
+            } else {
+                elements.resultMessage.textContent = `You answered ${correctCount} out of ${state.quizData.length} questions correctly.`;
+            }
+            
+            // Show review questions
+            showReviewQuestions();
+        }
+
+        // Show review questions with time per question
+        function showReviewQuestions() {
+            elements.reviewQuestions.innerHTML = '';
+            
+            state.quizData.forEach((question, index) => {
+                const userAnswer = state.userAnswers[index] || 'None';
+                const correctAnswerLetters = question.correctAnswers.join(', ');
+                const timeSpent = formatTime(state.questionTimes[index] || 0);
+                
+                const isCorrect = () => {
+                    const userAnswers = userAnswer.split(',').filter(a => a);
+                    return userAnswers.length === question.correctAnswers.length && 
+                           userAnswers.every(a => question.correctAnswers.includes(a));
+                };
+                
+                // Create answer details HTML
+                let answerDetailsHTML = '';
+                question.answers.forEach(answer => {
+                    const isUserSelected = userAnswer.includes(answer.letter);
+                    const isCorrectAnswer = question.correctAnswers.includes(answer.letter);
+                    
+                    let answerClass = '';
+                    let bgColor = 'var(--bg-secondary)';
+                    if (isCorrectAnswer) {
+                        answerClass = 'border-green-500';
+                        bgColor = '#10b98120';
+                    } else if (isUserSelected) {
+                        answerClass = 'border-red-500';
+                        bgColor = '#ef444420';
+                    }
+                    
+                    answerDetailsHTML += `
+                        <div class="p-3 border rounded-lg mb-2 ${answerClass}" style="background-color: ${bgColor}; border-color: var(--border-color);">
+                            <div class="flex items-start">
+                                <span class="font-medium mr-2">${answer.letter}.</span>
+                                <div>${sanitizeHTML(answer.text)}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                const reviewItem = document.createElement('div');
+                reviewItem.className = `p-4 rounded-lg border ${isCorrect() ? 'border-green-200' : 'border-red-200'}`;
+                reviewItem.style.backgroundColor = isCorrect() ? '#10b98110' : '#ef444410';
+                reviewItem.innerHTML = `
+                    <div class="flex justify-between items-start mb-3">
+                        <h4 class="font-medium">${index + 1}. ${sanitizeHTML(question.question)}</h4>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm px-2 py-1 rounded" style="background-color: var(--bg-secondary);">
+                                <i class="fas fa-clock text-xs"></i> ${timeSpent}
+                            </span>
+                            <span class="text-sm px-2 py-1 rounded ${isCorrect() ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${isCorrect() ? 'Correct' : 'Incorrect'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <div class="text-sm font-medium mb-1" style="color: var(--text-secondary);">Your answer:</div>
+                            <div class="${isCorrect() ? 'text-green-700' : 'text-red-700'}">
+                                ${userAnswer || 'No answer selected'}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-medium mb-1" style="color: var(--text-secondary);">Correct answer:</div>
+                            <div class="text-green-700">${correctAnswerLetters}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button class="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition toggle-answers">
+                            <i class="fas fa-chevron-down mr-1"></i> Show answer details
+                        </button>
+                    </div>
+                    
+                    <div class="answer-detail">
+                        ${answerDetailsHTML}
+                    </div>
+                `;
+                
+                // Add toggle functionality
+                const toggleBtn = reviewItem.querySelector('.toggle-answers');
+                const answerDetail = reviewItem.querySelector('.answer-detail');
+                
+                toggleBtn.addEventListener('click', () => {
+                    answerDetail.classList.toggle('show');
+                    const icon = toggleBtn.querySelector('i');
+                    if (answerDetail.classList.contains('show')) {
+                        toggleBtn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i> Hide answer details';
+                    } else {
+                        toggleBtn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i> Show answer details';
+                    }
+                });
+                
+                elements.reviewQuestions.appendChild(reviewItem);
+            });
+        }
+
+        // History panel functions
+        function showHistoryPanel() {
+            elements.settingsPanel.classList.add('hidden');
+            elements.historyPanel.classList.remove('hidden');
+            
+            const history = getQuizHistory();
+            
+            // Calculate statistics
+            const totalQuizzes = history.length;
+            const avgScore = history.length > 0 ? 
+                history.reduce((sum, h) => sum + h.score, 0) / history.length : 0;
+            const totalTime = history.reduce((sum, h) => sum + h.time, 0);
+            
+            document.getElementById('total-quizzes').textContent = totalQuizzes;
+            document.getElementById('avg-score').textContent = `${Math.round(avgScore)}%`;
+            document.getElementById('total-time').textContent = formatTime(totalTime);
+            
+            // Draw chart
+            drawScoreChart(history);
+            
+            // Show recent quizzes
+            showRecentQuizzes(history);
+        }
+
+        function drawScoreChart(history) {
+            const canvas = document.getElementById('score-chart');
+            const ctx = canvas.getContext('2d');
+            
+            // Get last 10 quizzes
+            const recentHistory = history.slice(-10);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: recentHistory.map((_, i) => `Quiz ${i + 1}`),
+                    datasets: [{
+                        label: 'Score %',
+                        data: recentHistory.map(h => h.score),
+                        borderColor: 'rgb(99, 102, 241)',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        function showRecentQuizzes(history) {
+            const container = document.getElementById('history-list');
+            container.innerHTML = '';
+            
+            // Show last 5 quizzes
+            history.slice(-5).reverse().forEach(quiz => {
+                const item = document.createElement('div');
+                item.className = 'p-3 rounded-lg border';
+                item.style.backgroundColor = 'var(--bg-secondary)';
+                item.style.borderColor = 'var(--border-color)';
+                
+                const date = new Date(quiz.date);
+                const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                
+                item.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <div class="font-medium">${quiz.type.charAt(0).toUpperCase() + quiz.type.slice(1)} Quiz</div>
+                            <div class="text-sm" style="color: var(--text-secondary);">${dateStr}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold ${quiz.score >= 70 ? 'text-green-600' : 'text-red-600'}">
+                                ${Math.round(quiz.score)}%
+                            </div>
+                            <div class="text-sm" style="color: var(--text-secondary);">
+                                ${quiz.correct}/${quiz.total}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(item);
+            });
+        }
+
+        // Restart the quiz
+        function restartQuiz() {
+            state.currentQuestionIndex = 0;
+            state.userAnswers = Array(state.quizData.length).fill(null);
+            state.questionTimes = Array(state.quizData.length).fill(0);
+            state.quizSubmitted = false;
+            state.startTime = new Date();
+            state.currentQuestionStartTime = Date.now();
+            
+            // Restart timer for mock exam
+            if (state.mockExam) {
+                state.remainingSeconds = 3 * 60 * 60;
+                startTimer(state.remainingSeconds);
+            }
+            
+            elements.resultsPanel.classList.add('hidden');
+            elements.quizPanel.classList.remove('hidden');
+            showCurrentQuestion();
+        }
+
+        // Show settings panel
+        function showSettingsPanel() {
+            state.quizStarted = false;
+            state.quizSubmitted = false;
+            
+            if (state.timerInterval) {
+                clearInterval(state.timerInterval);
+            }
+            
+            elements.resultsPanel.classList.add('hidden');
+            elements.quizPanel.classList.add('hidden');
+            elements.historyPanel.classList.add('hidden');
+            elements.settingsPanel.classList.remove('hidden');
+        }
+
+        // Start the timer
+        function startTimer(totalSeconds) {
+            elements.timerDisplay.classList.remove('hidden');
+            
+            state.remainingSeconds = totalSeconds;
+            updateTimerDisplay(state.remainingSeconds);
+            
+            state.timerInterval = setInterval(() => {
+                state.remainingSeconds--;
+                updateTimerDisplay(state.remainingSeconds);
+                
+                if (state.remainingSeconds <= 0) {
+                    clearInterval(state.timerInterval);
+                    submitQuiz();
+                }
+            }, 1000);
+        }
+
+        // Update timer display
+        function updateTimerDisplay(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            elements.timeDisplay.textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            
+            // Change color when time is running low
+            if (seconds < 300) { // 5 minutes
+                elements.timerDisplay.classList.add('bg-red-100', 'text-red-700');
+            }
+        }
+
+        // Format time in milliseconds to HH:MM:SS
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        // Show confirmation modal
+        function showConfirmationModal() {
+            elements.confirmationModal.classList.remove('hidden');
+        }
+
+        // Hide confirmation modal
+        function hideConfirmationModal() {
+            elements.confirmationModal.classList.add('hidden');
+        }
+
+        // Exit the quiz
+        function exitQuiz() {
+            hideConfirmationModal();
+            showSettingsPanel();
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
