@@ -776,19 +776,39 @@
             
             if (quizType === 'mock') {
                 elements.questionCountInput.value = 80;
-                elements.questionCountContainer.classList.add('hidden');
+                elements.questionCountInput.disabled = true;
+                elements.questionCountContainer.classList.remove('hidden');
                 state.mockExam = true;
+                
+                // Update label for mock exam
+                const label = elements.questionCountContainer.querySelector('label');
+                if (label) {
+                    label.textContent = 'Number of Questions (Mock Exam)';
+                }
             } else if (quizType === 'revision') {
                 const failedQuestions = getFailedQuestions();
                 elements.questionCountInput.value = Math.max(1, failedQuestions.length);
                 elements.questionCountInput.disabled = true;
-                elements.questionCountContainer.classList.add('hidden');
+                elements.questionCountContainer.classList.remove('hidden');
                 
                 // Update the label to show available failed questions
                 const label = elements.questionCountContainer.querySelector('label');
                 if (label) {
-                    label.textContent = `Available Failed Questions: ${failedQuestions.length}`;
+                    label.textContent = `Failed Questions Available`;
                 }
+                
+                // Add a small info text below the input
+                let infoText = elements.questionCountContainer.querySelector('.revision-info');
+                if (!infoText) {
+                    infoText = document.createElement('p');
+                    infoText.className = 'revision-info mt-1 text-xs';
+                    infoText.style.color = 'var(--text-secondary)';
+                    elements.questionCountContainer.appendChild(infoText);
+                }
+                infoText.textContent = failedQuestions.length === 0 ? 
+                    'No failed questions to review' : 
+                    `${failedQuestions.length} question(s) will be used for revision`;
+                    
             } else {
                 elements.questionCountInput.disabled = false;
                 elements.questionCountContainer.classList.remove('hidden');
@@ -798,6 +818,12 @@
                 const label = elements.questionCountContainer.querySelector('label');
                 if (label) {
                     label.textContent = 'Number of Questions';
+                }
+                
+                // Remove revision info if it exists
+                const infoText = elements.questionCountContainer.querySelector('.revision-info');
+                if (infoText) {
+                    infoText.remove();
                 }
             }
         }
