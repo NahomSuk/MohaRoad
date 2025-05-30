@@ -787,14 +787,16 @@
                 }
             } else if (quizType === 'revision') {
                 const failedQuestions = getFailedQuestions();
-                elements.questionCountInput.value = Math.max(1, failedQuestions.length);
-                elements.questionCountInput.disabled = true;
+                const maxQuestions = Math.max(1, failedQuestions.length);
+                elements.questionCountInput.value = maxQuestions;
+                elements.questionCountInput.disabled = false; // Allow modification
+                elements.questionCountInput.max = maxQuestions; // Set maximum limit
                 elements.questionCountContainer.classList.remove('hidden');
                 
                 // Update the label to show available failed questions
                 const label = elements.questionCountContainer.querySelector('label');
                 if (label) {
-                    label.textContent = `Failed Questions Available`;
+                    label.textContent = `Number of Questions to Review`;
                 }
                 
                 // Add a small info text below the input
@@ -807,10 +809,11 @@
                 }
                 infoText.textContent = failedQuestions.length === 0 ? 
                     'No failed questions to review' : 
-                    `${failedQuestions.length} question(s) will be used for revision`;
+                    `${failedQuestions.length} failed question(s) available for revision`;
                     
             } else {
                 elements.questionCountInput.disabled = false;
+                elements.questionCountInput.removeAttribute('max'); // Remove max limit
                 elements.questionCountContainer.classList.remove('hidden');
                 state.mockExam = false;
                 
@@ -903,19 +906,22 @@
                 return;
             }
 
-            // Special handling for revision mode
+            // Validate question count for all modes
+            const questionCount = parseInt(elements.questionCountInput.value);
+            if (isNaN(questionCount) || questionCount < 1) {
+                alert('Please enter a valid number of questions');
+                return;
+            }
+
+            // Special validation for revision mode
             if (state.quizType === 'revision') {
                 const failedQuestions = getFailedQuestions();
                 if (failedQuestions.length === 0) {
                     alert('No failed questions to review! Great job!');
                     return;
                 }
-                // Skip question count validation for revision mode
-            } else {
-                // Validate question count for other modes
-                const questionCount = parseInt(elements.questionCountInput.value);
-                if (isNaN(questionCount) || questionCount < 1) {
-                    alert('Please enter a valid number of questions');
+                if (questionCount > failedQuestions.length) {
+                    alert(`You can only select up to ${failedQuestions.length} questions for revision.`);
                     return;
                 }
             }
@@ -929,13 +935,11 @@
                 let quizQuestions = [];
 
                 if (state.quizType === 'revision') {
-                    // Load failed questions
-                    quizQuestions = getFailedQuestions();
-                    // Use all failed questions for revision
-                    state.quizData = quizQuestions;
+                    // Load failed questions and take only the requested number
+                    const allFailedQuestions = getFailedQuestions();
+                    // Shuffle and take the requested number of questions
+                    state.quizData = shuffleArray(allFailedQuestions).slice(0, questionCount);
                 } else {
-                    const questionCount = parseInt(elements.questionCountInput.value);
-                    
                     // Try to get cached questions first
                     const cachedQuestions = getCachedQuestions();
                     
@@ -1020,7 +1024,6 @@
                     const cachedQuestions = getCachedQuestions();
                     if (cachedQuestions) {
                         if (confirm('Unable to fetch new questions. Use cached questions from last session?')) {
-                            const questionCount = parseInt(elements.questionCountInput.value);
                             // Retry with cached questions
                             state.quizData = shuffleArray(cachedQuestions).slice(0, questionCount);
                             state.userAnswers = Array(state.quizData.length).fill(null);
