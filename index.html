@@ -577,6 +577,9 @@
                 document.getElementById('app').classList.add('compact-mode');
             }
 
+            // Initialize quiz type settings
+            toggleQuizType();
+
             // Initialize swipe gestures for mobile
             initSwipeGestures();
 
@@ -777,13 +780,25 @@
                 state.mockExam = true;
             } else if (quizType === 'revision') {
                 const failedQuestions = getFailedQuestions();
-                elements.questionCountInput.value = failedQuestions.length;
+                elements.questionCountInput.value = Math.max(1, failedQuestions.length);
                 elements.questionCountInput.disabled = true;
                 elements.questionCountContainer.classList.add('hidden');
+                
+                // Update the label to show available failed questions
+                const label = elements.questionCountContainer.querySelector('label');
+                if (label) {
+                    label.textContent = `Available Failed Questions: ${failedQuestions.length}`;
+                }
             } else {
                 elements.questionCountInput.disabled = false;
                 elements.questionCountContainer.classList.remove('hidden');
                 state.mockExam = false;
+                
+                // Reset label
+                const label = elements.questionCountContainer.querySelector('label');
+                if (label) {
+                    label.textContent = 'Number of Questions';
+                }
             }
         }
 
@@ -819,7 +834,13 @@
             if (!stored) return [];
             
             const questions = JSON.parse(stored);
-            // Filter questions that are due for review
+            
+            // In revision mode, return all failed questions regardless of review schedule
+            if (state.quizType === 'revision') {
+                return questions;
+            }
+            
+            // Otherwise, filter questions that are due for review (spaced repetition)
             return questions.filter(q => q.nextReview <= Date.now());
         }
 
@@ -856,10 +877,21 @@
                 return;
             }
 
-            const questionCount = parseInt(elements.questionCountInput.value);
-            if (isNaN(questionCount) || questionCount < 1) {
-                alert('Please enter a valid number of questions');
-                return;
+            // Special handling for revision mode
+            if (state.quizType === 'revision') {
+                const failedQuestions = getFailedQuestions();
+                if (failedQuestions.length === 0) {
+                    alert('No failed questions to review! Great job!');
+                    return;
+                }
+                // Skip question count validation for revision mode
+            } else {
+                // Validate question count for other modes
+                const questionCount = parseInt(elements.questionCountInput.value);
+                if (isNaN(questionCount) || questionCount < 1) {
+                    alert('Please enter a valid number of questions');
+                    return;
+                }
             }
 
             state.strictMode = elements.strictModeCheckbox.checked;
@@ -873,15 +905,11 @@
                 if (state.quizType === 'revision') {
                     // Load failed questions
                     quizQuestions = getFailedQuestions();
-                    if (quizQuestions.length === 0) {
-                        alert('No failed questions to review! Great job!');
-                        elements.startQuizBtn.disabled = false;
-                        elements.startQuizBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Start Quiz';
-                        return;
-                    }
                     // Use all failed questions for revision
                     state.quizData = quizQuestions;
                 } else {
+                    const questionCount = parseInt(elements.questionCountInput.value);
+                    
                     // Try to get cached questions first
                     const cachedQuestions = getCachedQuestions();
                     
@@ -961,29 +989,34 @@
             } catch (error) {
                 console.error('Error loading quiz data:', error);
                 
-                // Try offline mode
-                const cachedQuestions = getCachedQuestions();
-                if (cachedQuestions) {
-                    if (confirm('Unable to fetch new questions. Use cached questions from last session?')) {
-                        // Retry with cached questions
-                        state.quizData = shuffleArray(cachedQuestions).slice(0, questionCount);
-                        state.userAnswers = Array(state.quizData.length).fill(null);
-                        state.questionTimes = Array(state.quizData.length).fill(0);
-                        state.currentQuestionIndex = 0;
-                        state.quizStarted = true;
-                        state.quizSubmitted = false;
-                        state.startTime = new Date();
-                        state.currentQuestionStartTime = Date.now();
+                // Try offline mode (only for non-revision modes)
+                if (state.quizType !== 'revision') {
+                    const cachedQuestions = getCachedQuestions();
+                    if (cachedQuestions) {
+                        if (confirm('Unable to fetch new questions. Use cached questions from last session?')) {
+                            const questionCount = parseInt(elements.questionCountInput.value);
+                            // Retry with cached questions
+                            state.quizData = shuffleArray(cachedQuestions).slice(0, questionCount);
+                            state.userAnswers = Array(state.quizData.length).fill(null);
+                            state.questionTimes = Array(state.quizData.length).fill(0);
+                            state.currentQuestionIndex = 0;
+                            state.quizStarted = true;
+                            state.quizSubmitted = false;
+                            state.startTime = new Date();
+                            state.currentQuestionStartTime = Date.now();
 
-                        elements.settingsPanel.classList.add('hidden');
-                        elements.quizPanel.classList.remove('hidden');
-                        elements.totalQuestionsDisplay.textContent = state.quizData.length;
-                        showCurrentQuestion(true);
-                        
-                        alert('Using cached questions. Note: These may not be the latest version.');
+                            elements.settingsPanel.classList.add('hidden');
+                            elements.quizPanel.classList.remove('hidden');
+                            elements.totalQuestionsDisplay.textContent = state.quizData.length;
+                            showCurrentQuestion(true);
+                            
+                            alert('Using cached questions. Note: These may not be the latest version.');
+                        }
+                    } else {
+                        alert('Error loading quiz data: ' + error.message);
                     }
                 } else {
-                    alert('Error loading quiz data: ' + error.message);
+                    alert('Error loading revision questions: ' + error.message);
                 }
             } finally {
                 elements.startQuizBtn.disabled = false;
